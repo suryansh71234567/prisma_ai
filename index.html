@@ -1,0 +1,1534 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prisma AI - Mission Control Dark</title>
+    <!-- Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* Color system */
+        :root {
+            --bg: #09090e;
+            --bg2: #0f1018;
+            --bg3: #161822;
+            --bg4: #1d2030;
+            --border: #252840;
+            --accent: #4f8ef7;
+            --accent-dim: #4f8ef720;
+            --green: #22c55e;
+            --yellow: #eab308;
+            --orange: #f97316;
+            --red: #ef4444;
+            --text: #dde1f0;
+            --text2: #8890aa;
+            --text3: #454d68;
+        }
+
+        /* Base Reset & Global Styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Syne', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            background-image: radial-gradient(circle, #252840 1px, transparent 1px);
+            background-size: 28px 28px;
+            background-position: 0 0;
+        }
+
+        .mono-label {
+            font-family: 'DM Mono', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        button,
+        input,
+        select,
+        textarea {
+            font-family: inherit;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg4);
+            border-radius: 3px;
+        }
+
+        /* Interactive Elements */
+        .btn {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: all 0.15s ease;
+            border: 1px solid transparent;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--bg4);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-primary:not(:disabled):hover {
+            background: var(--accent-dim);
+            border-color: var(--accent);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:not(:disabled):hover {
+            background: var(--bg4);
+        }
+
+        .btn-danger {
+            background: transparent;
+            color: var(--red);
+            border: 1px solid var(--border);
+        }
+
+        .btn-danger:not(:disabled):hover {
+            background: #ef444420;
+            border-color: var(--red);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text2);
+            border: none;
+        }
+
+        .btn-ghost:not(:disabled):hover {
+            color: var(--text);
+        }
+
+        .btn-sm {
+            padding: 8px;
+            font-size: 11px;
+        }
+
+        /* Card Elements */
+        .card {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            position: relative;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: -1px;
+            right: -1px;
+            height: 1px;
+            background: var(--accent);
+            opacity: 0.3;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+        }
+
+        /* Phases */
+        .phase-container {
+            position: fixed;
+            inset: 0;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(8px);
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            display: flex;
+        }
+
+        .phase-container.active {
+            opacity: 1;
+            pointer-events: all;
+            transform: translateY(0);
+        }
+
+        /* Form Inputs */
+        input[type="text"],
+        input[type="email"],
+        input[type="password"],
+        select,
+        textarea {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px;
+            border-radius: 6px;
+            font-family: 'Syne', sans-serif;
+            transition: all 0.15s ease;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            border-radius: 4px;
+        }
+
+        textarea {
+            resize: none;
+            font-size: 14px;
+            box-shadow: inset 0 1px 0 var(--border);
+        }
+
+        /* Toasts */
+        #toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .toast {
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            padding: 10px 16px;
+            border-radius: 6px;
+            max-width: 320px;
+            animation: toast-in 0.3s ease;
+            transition: opacity 0.3s ease;
+        }
+
+        @keyframes toast-in {
+            from {
+                transform: translateX(20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast.success {
+            background: var(--green);
+            color: #fff;
+        }
+
+        .toast.error {
+            background: var(--red);
+            color: #fff;
+        }
+
+        .toast.info {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        /* Loading Overlay */
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: #09090edd;
+            backdrop-filter: blur(2px);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid var(--border);
+            border-top: 2px solid var(--accent);
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Auth specific styles */
+        #auth-container {
+            justify-content: center;
+            align-items: center;
+        }
+
+        .auth-card {
+            width: 420px;
+            padding: 32px;
+        }
+
+        .auth-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .auth-title {
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 28px;
+            color: var(--accent);
+            display: inline-block;
+        }
+
+        .auth-subtitle {
+            font-family: 'DM Mono', monospace;
+            font-weight: 400;
+            font-size: 28px;
+            color: var(--text2);
+            display: inline-block;
+            margin-left: 4px;
+        }
+
+        .auth-tagline {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text3);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        .tab-switcher {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            color: var(--text3);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.15s ease;
+        }
+
+        .tab.active {
+            color: var(--text);
+            border-bottom: 2px solid var(--accent);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text2);
+            letter-spacing: 0.08em;
+            margin-bottom: 6px;
+        }
+
+        .form-error {
+            color: var(--red);
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .auth-btn {
+            width: 100%;
+            padding: 12px;
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-top: 8px;
+        }
+
+        /* specific sections ... (session, break, graph) added later */
+    </style>
+</head>
+
+<body>
+    <div id="toast-container"></div>
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-message" class="mono-label"
+            style="font-size: 12px; color: var(--text2); letter-spacing: 0.1em;">LOADING</div>
+    </div>
+
+    <!-- AUTH PHASE -->
+    <div id="phase-auth" class="phase-container active"
+        style="flex-direction: column; align-items: center; justify-content: center;">
+        <div class="card auth-card">
+            <div class="auth-header">
+                <span class="auth-title">PRISMA</span><span class="auth-subtitle">AI</span>
+                <div class="auth-tagline">ADAPTIVE JEE TUTORING</div>
+            </div>
+
+            <div class="tab-switcher">
+                <div class="tab active" onclick="switchAuthTab('login')">LOGIN</div>
+                <div class="tab" onclick="switchAuthTab('register')">REGISTER</div>
+            </div>
+
+            <form id="auth-form" onsubmit="handleAuth(event)">
+                <div id="register-fields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Name</label>
+                        <input type="text" id="auth-name" placeholder="Student Name">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="auth-email" required placeholder="student@example.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" id="auth-password" required placeholder="••••••••">
+                </div>
+                <div id="auth-error" class="form-error"></div>
+                <button type="submit" id="auth-submit" class="btn btn-primary auth-btn">LOGIN</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- CSS Phase 2: Session, Break, Graph -->
+    <style>
+        /* Sidebar Layout */
+        #phase-session {
+            display: flex;
+            flex-direction: row;
+        }
+
+        .sidebar {
+            width: 280px;
+            flex-shrink: 0;
+            background: var(--bg2);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            gap: 16px;
+            overflow-y: auto;
+        }
+
+        .student-block,
+        .chapter-block,
+        .timer-block,
+        .session-info {
+            position: relative;
+        }
+
+        .avatar {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: var(--accent-dim);
+            border: 1px solid var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'DM Mono', monospace;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        .divider {
+            height: 1px;
+            background: var(--border);
+            width: 100%;
+        }
+
+        .chapter-select {
+            margin-top: 6px;
+        }
+
+        .session-info {
+            opacity: 0;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            animation: fade-in 0.5s forwards;
+        }
+
+        @keyframes fade-in {
+            to {
+                opacity: 1;
+            }
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .info-label {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            color: var(--text3);
+        }
+
+        .info-val {
+            font-size: 13px;
+            color: var(--text);
+        }
+
+        .diff-dots {
+            display: flex;
+            gap: 2px;
+        }
+
+        .dot {
+            color: var(--border);
+            font-size: 12px;
+        }
+
+        .dot.active {
+            color: var(--accent);
+        }
+
+        .timer-val {
+            font-family: 'DM Mono', monospace;
+            font-weight: 500;
+            font-size: 24px;
+            color: var(--text);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .timer-val.danger {
+            color: var(--red);
+        }
+
+        .action-btns {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 100%;
+            margin-top: auto;
+        }
+
+        /* Chat Area Layout */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            height: 52px;
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .status-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text3);
+        }
+
+        .status-dot.active {
+            background: var(--green);
+            box-shadow: 0 0 6px #22c55e50;
+        }
+
+        .chat-title {
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--text2);
+            letter-spacing: 0.08em;
+        }
+
+        .session-id {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text3);
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .empty-state {
+            margin: auto;
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            color: var(--text3);
+            text-transform: uppercase;
+        }
+
+        /* Messages styling */
+        .msg {
+            display: flex;
+            gap: 10px;
+            max-width: 78%;
+        }
+
+        .msg.tutor {
+            align-self: flex-start;
+        }
+
+        .msg.student {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .msg-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--accent-dim);
+            border: 1px solid #4f8ef740;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        .bubble-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .msg.student .bubble-container {
+            align-items: flex-end;
+        }
+
+        .bubble {
+            padding: 12px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .tutor .bubble {
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            border-left: 2px solid #4f8ef760;
+            border-top-left-radius: 0;
+        }
+
+        .student .bubble {
+            background: var(--accent);
+            color: #fff;
+            border-top-right-radius: 0;
+        }
+
+        .msg-time {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            color: var(--text3);
+        }
+
+        /* Markdown rendering inside tutor bubble */
+        .tutor .bubble pre,
+        .tutor .bubble code {
+            font-family: 'DM Mono', monospace;
+            background: var(--bg4);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        .tutor .bubble strong {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .tutor .bubble p {
+            margin-bottom: 8px;
+        }
+
+        .tutor .bubble p:last-child {
+            margin-bottom: 0;
+        }
+
+        .tutor .bubble ul,
+        .tutor .bubble ol {
+            padding-left: 18px;
+            margin: 6px 0;
+        }
+
+        /* Typing indicator */
+        .typing {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            padding: 6px 0;
+        }
+
+        .typing .tdot {
+            width: 4px;
+            height: 4px;
+            background: var(--text);
+            border-radius: 50%;
+            animation: blink 1.2s infinite;
+        }
+
+        .typing .tdot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing .tdot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes blink {
+
+            0%,
+            80%,
+            100% {
+                opacity: 0.2;
+            }
+
+            40% {
+                opacity: 1;
+            }
+        }
+
+        /* Chat Input */
+        .input-area {
+            border-top: 1px solid var(--border);
+            padding: 16px 20px;
+            background: var(--bg2);
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .chat-input {
+            flex: 1;
+            min-height: 40px;
+            max-height: 96px;
+            padding: 10px 14px;
+        }
+
+        .send-btn {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            border-radius: 6px;
+            flex-shrink: 0;
+        }
+
+        /* Session Complete Card inside chat */
+        .session-complete-msg {
+            align-self: center;
+            background: var(--bg3);
+            border: 1px solid #4f8ef740;
+            border-top: 2px solid var(--accent);
+            border-radius: 6px;
+            padding: 16px;
+            width: 80%;
+            max-width: 400px;
+            margin: 16px 0;
+        }
+
+        .sc-head {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--accent);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .sc-body {
+            font-size: 14px;
+            color: var(--text);
+            margin-bottom: 12px;
+        }
+
+        .sc-track {
+            height: 4px;
+            background: var(--bg4);
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 4px;
+        }
+
+        .sc-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            background: var(--accent);
+            transition: width 1s ease;
+        }
+
+        .sc-label {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--text2);
+        }
+    </style>
+
+    <!-- SESSION PHASE -->
+    <div id="phase-session" class="phase-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="student-block" style="display: flex; align-items: center; gap: 12px;">
+                <div class="avatar" id="sidebar-avatar">--</div>
+                <div style="display: flex; flex-direction: column;">
+                    <div id="sidebar-name" style="font-size: 14px; font-weight: 500;">Name</div>
+                    <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text3);">STUDENT</div>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="chapter-block flex flex-col">
+                <div class="mono-label" style="font-size: 11px; color: var(--text2); margin-bottom: 6px;">CHAPTER</div>
+                <select id="chapter-select" class="chapter-select">
+                    <option value="electrostatics">Electrostatics</option>
+                    <option value="current_electricity">Current Electricity</option>
+                    <option value="electromagnetic_induction">Electromagnetic Induction</option>
+                    <option value="alternating_current">Alternating Current</option>
+                    <option value="magnetism">Magnetism</option>
+                    <option value="electromagnetic_waves">Electromagnetic Waves</option>
+                </select>
+                <button id="start-session-btn" class="btn btn-primary"
+                    style="margin-top: 12px; font-family: 'DM Mono', monospace; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; padding: 12px;"
+                    onclick="startSession()">START SESSION</button>
+            </div>
+
+            <div id="session-info-block" class="session-info">
+                <div class="mono-label" style="font-size: 10px; color: var(--text3); margin-top: 8px;">SESSION PLAN
+                </div>
+                <div class="info-row">
+                    <span class="info-label">GOAL</span><span class="info-val" id="plan-goal">--</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">TOPIC</span><span class="info-val" id="plan-topic">--</span>
+                </div>
+                <div class="info-row" style="margin-top: 4px;">
+                    <span class="info-label">DIFFICULTY</span>
+                    <div class="diff-dots" id="plan-diff">
+                        <span class="dot">●</span><span class="dot">●</span><span class="dot">●</span><span
+                            class="dot">●</span><span class="dot">●</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="timer-block">
+                <div class="mono-label" style="font-size: 10px; color: var(--text3); margin-bottom: 4px;">ELAPSED</div>
+                <div id="session-timer" class="timer-val">00:00</div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="action-btns">
+                <button id="btn-hint" class="btn btn-secondary btn-sm mono-label" onclick="requestHint()">REQUEST
+                    HINT</button>
+                <button id="btn-end" class="btn btn-danger btn-sm mono-label" onclick="endSession()">END
+                    SESSION</button>
+                <button class="btn btn-ghost btn-sm mono-label" onclick="setPhase('graph')">KNOWLEDGE GRAPH</button>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <div class="chat-header">
+                <div class="status-header">
+                    <div id="chat-status-dot" class="status-dot"></div>
+                    <div class="chat-title">PRISMA AI TUTOR</div>
+                </div>
+                <div id="header-sid" class="session-id"></div>
+            </div>
+
+            <div id="messages-container" class="messages">
+                <div class="empty-state">WAITING FOR SESSION TO START</div>
+            </div>
+
+            <div class="input-area">
+                <textarea id="chat-input" class="chat-input" placeholder="Type your message..." rows="1"
+                    oninput="resizeInput()" onkeydown="handleChatKey(event)" disabled></textarea>
+                <button id="chat-send" class="btn btn-primary send-btn" onclick="sendMessage()" disabled>
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                        <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BREAK PHASE -->
+    <div id="phase-break" class="phase-container">
+        <div class="card break-card">
+            <div class="break-header">SESSION COMPLETE</div>
+            <div id="break-timer-disp" class="break-timer">5:00</div>
+            <div class="break-sub1">TAKE A SHORT BREAK</div>
+            <div class="break-sub2">Your knowledge graph is updating in the background.</div>
+
+            <div class="break-progress-wrap">
+                <div id="break-progress" class="break-progress-fill"></div>
+            </div>
+
+            <div class="break-btns">
+                <button id="btn-continue" class="btn btn-primary mono-label"
+                    style="width: 100%; padding: 12px; display: none;" onclick="continueLearning()">CONTINUE
+                    LEARNING</button>
+                <button class="btn btn-secondary mono-label" style="width: 100%; padding: 12px;"
+                    onclick="setPhase('graph')">VIEW KNOWLEDGE GRAPH</button>
+                <button id="btn-skip" class="btn-skip" onclick="continueLearning()">SKIP
+                    BREAK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GRAPH PHASE -->
+    <div id="phase-graph" class="phase-container">
+        <div class="graph-header">
+            <button class="btn btn-ghost mono-label" style="padding: 0; font-size: 12px;" onclick="goBackFromGraph()">←
+                BACK</button>
+            <div class="v-divider"></div>
+            <div class="graph-title">KNOWLEDGE GRAPH</div>
+            <div id="graph-chapter-name" class="graph-chapter">--</div>
+            <div id="graph-timestamp" class="graph-time"></div>
+        </div>
+
+        <div class="graph-container">
+            <div id="network-graph"></div>
+            <div id="graph-message" class="graph-msg" style="display: none;">
+                <div class="graph-msg-text">GRAPH AVAILABLE AFTER FIRST SESSION</div>
+            </div>
+
+            <div id="node-tooltip">
+                <div id="tt-name" class="tt-title">Concept Name</div>
+                <div class="tt-label">MASTERY</div>
+                <div class="sc-track" style="margin-bottom: 8px;">
+                    <div id="tt-bar" class="sc-fill"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <div class="tt-label">DIFFICULTY</div>
+                    <div id="tt-diff" class="mono-label" style="font-size: 10px; color: var(--text);">--</div>
+                </div>
+            </div>
+
+            <div class="legend">
+                <div class="leg-item"><span style="color: var(--green);">●</span> MASTERED</div>
+                <div class="leg-item"><span style="color: var(--yellow);">●</span> LEARNING</div>
+                <div class="leg-item"><span style="color: var(--orange);">●</span> WEAK</div>
+                <div class="leg-item"><span style="color: var(--red);">●</span> NOT STARTED</div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const API_BASE = "http://localhost:8000";
+        const state = {
+            token: sessionStorage.getItem('prisma_token'),
+            studentId: sessionStorage.getItem('prisma_studentId'),
+            studentName: sessionStorage.getItem('prisma_studentName'),
+            sessionId: null,
+            chapter: null,
+            phase: "auth",
+            exchangeEvents: [],
+            sessionStartTime: null,
+            consecutiveWrong: 0,
+            consecutiveCorrect: 0,
+            hintRequested: false,
+            messageDisplayTime: null
+        };
+
+        let timerInterval = null;
+        let breakInterval = null;
+        let network = null;
+        let prevPhase = "auth";
+
+        // Toasts & Loading
+        function showToast(message, type = "error") {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = "0";
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function showLoading(msg = "LOADING") {
+            document.getElementById('loading-message').textContent = msg;
+            document.getElementById('loading-overlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+
+        // Phase Management
+        function setPhase(newPhase) {
+            document.querySelectorAll('.phase-container').forEach(el => el.classList.remove('active'));
+            document.getElementById(`phase-${newPhase}`).classList.add('active');
+
+            if (newPhase === 'graph' && state.phase !== 'graph') {
+                prevPhase = state.phase;
+                loadGraph();
+            }
+            state.phase = newPhase;
+
+            if (newPhase === 'break') {
+                startBreakTimer();
+            }
+        }
+
+        function goBackFromGraph() {
+            setPhase(prevPhase);
+        }
+
+        // Initialize
+        window.onload = () => {
+            if (state.token) {
+                document.getElementById('sidebar-avatar').textContent = (state.studentName || 'S').substring(0, 2).toUpperCase();
+                document.getElementById('sidebar-name').textContent = state.studentName;
+                setPhase('session');
+            }
+        };
+
+        // API Helper
+        async function api(endpoint, options = {}) {
+            const headers = { "Content-Type": "application/json" };
+            if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
+            try {
+                const res = await fetch(API_BASE + endpoint, { ...options, headers });
+                if (res.status === 401) {
+                    sessionStorage.clear(); state.token = null;
+                    setPhase("auth"); showToast("Session expired. Please login.");
+                    throw new Error("Unauthorized");
+                }
+                const isJson = res.headers.get("content-type")?.includes("application/json");
+                const data = isJson ? await res.json() : null;
+                if (!res.ok) {
+                    showToast(data?.detail || "API Error");
+                    throw new Error("API Error");
+                }
+                return data;
+            } catch (err) {
+                if (err.message !== "Unauthorized" && err.message !== "API Error") showToast("Network error");
+                throw err;
+            }
+        }
+
+        // Auth
+        function switchAuthTab(type) {
+            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('register-fields').style.display = type === 'register' ? 'block' : 'none';
+            document.getElementById('auth-submit').textContent = type.toUpperCase();
+        }
+
+        async function handleAuth(e) {
+            e.preventDefault();
+            const btn = document.getElementById('auth-submit');
+            const isReg = btn.textContent === 'REGISTER';
+            const email = document.getElementById('auth-email').value;
+            const password = document.getElementById('auth-password').value;
+            const name = document.getElementById('auth-name').value;
+
+            btn.textContent = '···';
+            btn.disabled = true;
+            try {
+                let data;
+                if (isReg) {
+                    data = await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password, name }) });
+                } else {
+                    const params = new URLSearchParams();
+                    params.append('username', email);
+                    params.append('password', password);
+                    const res = await fetch(API_BASE + '/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: params
+                    });
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.detail || 'Login failed');
+                    }
+                    data = await res.json();
+                }
+
+                state.token = data.access_token;
+                state.studentId = data.student_id || data.student?.id;
+                state.studentName = data.student_name || data.student?.name || name || email.split('@')[0];
+
+                sessionStorage.setItem('prisma_token', state.token);
+                sessionStorage.setItem('prisma_studentId', state.studentId);
+                sessionStorage.setItem('prisma_studentName', state.studentName);
+
+                document.getElementById('sidebar-avatar').textContent = state.studentName.substring(0, 2).toUpperCase();
+                document.getElementById('sidebar-name').textContent = state.studentName;
+
+                setPhase('session');
+                showToast("Logged in successfully", "success");
+            } catch (err) {
+                if (err.message && err.message !== "Network error" && err.message !== "API Error" && err.message !== "Unauthorized") {
+                    showToast(err.message);
+                }
+            } finally {
+                btn.textContent = isReg ? 'REGISTER' : 'LOGIN';
+                btn.disabled = false;
+            }
+        }
+
+        // Session
+        async function startSession() {
+            state.chapter = document.getElementById('chapter-select').value;
+            const btn = document.getElementById('start-session-btn');
+            btn.disabled = true;
+            btn.textContent = '···';
+
+            try {
+                const data = await api('/api/session/start', {
+                    method: 'POST',
+                    body: JSON.stringify({ chapter: state.chapter })
+                });
+
+                state.sessionId = data.session_id;
+                state.sessionStartTime = Date.now();
+                state.exchangeEvents = [];
+
+                // Update UI Plan
+                document.getElementById('plan-goal').textContent = data.plan?.session_goal || '--';
+                document.getElementById('plan-topic').textContent = data.plan?.target_concepts?.[0] || '--';
+
+                const diffMap = { "easy": 1, "medium": 2, "hard": 3, "very_hard": 4, "expert": 5 };
+                const currentDiffStr = data.plan?.difficulty_baseline || "easy";
+                const diffLevel = diffMap[currentDiffStr.toLowerCase()] || 1;
+
+                const dots = document.getElementById('plan-diff').children;
+                for (let i = 0; i < 5; i++) {
+                    dots[i].className = i < diffLevel ? 'dot active' : 'dot';
+                }
+
+                document.getElementById('session-info-block').style.display = 'flex';
+                document.getElementById('chapter-select').disabled = true;
+
+                document.getElementById('chat-status-dot').classList.add('active');
+                document.getElementById('header-sid').textContent = `SID: ${state.sessionId.substring(0, 8)}`;
+
+                document.getElementById('chat-input').disabled = false;
+                document.getElementById('messages-container').innerHTML = '';
+
+                // Start Timer
+                timerInterval = setInterval(() => {
+                    if (state.phase !== 'session') return;
+                    const elapsed = Date.now() - state.sessionStartTime;
+                    const m = Math.floor(elapsed / 60000).toString().padStart(2, '0');
+                    const s = Math.floor((elapsed % 60000) / 1000).toString().padStart(2, '0');
+                    const d = document.getElementById('session-timer');
+                    d.textContent = `${m}:${s}`;
+                    if (elapsed > 22 * 60000) d.classList.add('danger');
+                }, 1000);
+
+                addTutorMessage(data.first_message || "Hello! Ready to begin?");
+                state.messageDisplayTime = Date.now();
+
+                setInterval(() => {
+                    const btnSend = document.getElementById('chat-send');
+                    btnSend.disabled = !document.getElementById('chat-input').value.trim();
+                }, 200);
+
+            } catch (err) {
+                btn.textContent = 'START SESSION';
+                btn.disabled = false;
+            }
+        }
+
+        function requestHint() {
+            if (!state.sessionId) return;
+            state.hintRequested = true;
+            const b = document.getElementById('btn-hint');
+            b.style.background = 'var(--accent-dim)';
+            b.textContent = 'HINT QUEUED';
+        }
+
+        function resizeInput() {
+            const el = document.getElementById('chat-input');
+            el.style.height = 'auto';
+            el.style.height = (el.scrollHeight) + 'px';
+        }
+
+        function handleChatKey(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function getTimestampStr() {
+            const d = new Date();
+            return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
+        }
+
+        function addTutorMessage(text) {
+            const c = document.getElementById('messages-container');
+            const d = document.createElement('div');
+            d.className = 'msg tutor';
+            d.innerHTML = `
+                <div class="msg-avatar">AI</div>
+                <div class="bubble-container">
+                    <div class="bubble">${marked.parse(text)}</div>
+                    <div class="msg-time">${getTimestampStr()}</div>
+                </div>
+            `;
+            c.appendChild(d);
+            c.scrollTop = c.scrollHeight;
+        }
+
+        function addStudentMessage(text) {
+            const c = document.getElementById('messages-container');
+            const d = document.createElement('div');
+            d.className = 'msg student';
+            d.innerHTML = `
+                <div class="bubble-container">
+                    <div class="bubble"></div>
+                    <div class="msg-time">${getTimestampStr()}</div>
+                </div>
+            `;
+            d.querySelector('.bubble').textContent = text;
+            c.appendChild(d);
+            c.scrollTop = c.scrollHeight;
+        }
+
+        function showTyping() {
+            const c = document.getElementById('messages-container');
+            const d = document.createElement('div');
+            d.id = 'typing-ind';
+            d.className = 'msg tutor';
+            d.innerHTML = `
+                <div class="msg-avatar">AI</div>
+                <div class="bubble-container">
+                    <div class="bubble typing">
+                        <div class="tdot"></div><div class="tdot"></div><div class="tdot"></div>
+                    </div>
+                </div>
+            `;
+            c.appendChild(d);
+            c.scrollTop = c.scrollHeight;
+        }
+
+        async function sendMessage() {
+            if (!state.sessionId) return;
+            const input = document.getElementById('chat-input');
+            let text = input.value.trim();
+            if (!text) return;
+
+            input.value = '';
+            input.style.height = 'auto';
+
+            const lat = state.messageDisplayTime ? Date.now() - state.messageDisplayTime : 0;
+            const ts = {
+                response_latency_ms: lat,
+                hint_requested: state.hintRequested,
+                answer_changed: false,
+                consecutive_wrong: state.consecutiveWrong,
+                consecutive_correct: state.consecutiveCorrect
+            };
+
+            let displayMsg = text;
+            if (state.hintRequested) displayMsg = "(Hint requested) " + text;
+            addStudentMessage(displayMsg);
+
+            state.exchangeEvents.push({
+                event_type: "answer_submitted",
+                timestamp_ms: Date.now(),
+                payload: displayMsg
+            });
+
+            showTyping();
+
+            try {
+                const res = await api('/api/session/message', {
+                    method: 'POST',
+                    body: JSON.stringify({ session_id: state.sessionId, message: text, turn_signal: ts })
+                });
+
+                document.getElementById('typing-ind')?.remove();
+                addTutorMessage(res.message);
+
+                state.messageDisplayTime = Date.now();
+                if (state.hintRequested) {
+                    state.hintRequested = false;
+                    const b = document.getElementById('btn-hint');
+                    b.style.background = 'transparent';
+                    b.innerHTML = 'REQUEST<br>HINT';
+                }
+
+                if (res.session_ended) {
+                    endSession();
+                }
+
+            } catch (err) {
+                document.getElementById('typing-ind')?.remove();
+                addTutorMessage("**Error communicating with tutor.**");
+            }
+        }
+
+        async function endSession() {
+            if (!state.sessionId) return;
+            showLoading("ANALYZING SESSION");
+            try {
+                const res = await api('/api/session/end', {
+                    method: 'POST',
+                    body: JSON.stringify({ session_id: state.sessionId, exchange_events: state.exchangeEvents })
+                });
+
+                hideLoading();
+
+                const rate = res.record?.correct_rate || 1.0;
+
+                const c = document.getElementById('messages-container');
+                const d = document.createElement('div');
+                d.className = 'session-complete-msg';
+                d.innerHTML = `
+                    <div class="sc-head">SESSION COMPLETE</div>
+                    <div class="sc-body">Telemetry analyzed and knowledge graph updated.</div>
+                    <div class="sc-track">
+                        <div class="sc-fill" style="width: ${rate * 100}%"></div>
+                    </div>
+                    <div class="sc-label">COMPLETION: ${Math.round(rate * 100)}%</div>
+                `;
+                c.appendChild(d);
+                c.scrollTop = c.scrollHeight;
+
+                clearInterval(timerInterval);
+                document.getElementById('chat-status-dot').classList.remove('active');
+                document.getElementById('chat-input').disabled = true;
+
+                setTimeout(() => setPhase('break'), 3000);
+            } catch (e) {
+                hideLoading();
+            }
+        }
+
+        function startBreakTimer() {
+            let left = 300;
+            const disp = document.getElementById('break-timer-disp');
+            const prog = document.getElementById('break-progress');
+
+            document.getElementById('btn-continue').style.display = 'none';
+            disp.textContent = "5:00";
+            disp.style.color = "var(--text)";
+            prog.style.width = "0%";
+            prog.style.backgroundColor = "var(--green)";
+
+            clearInterval(breakInterval);
+            breakInterval = setInterval(() => {
+                left--;
+                if (left <= 0) {
+                    clearInterval(breakInterval);
+                    disp.textContent = "READY";
+                    disp.style.color = "var(--green)";
+                    prog.style.width = "100%";
+                    document.getElementById('btn-continue').style.display = 'inline-flex';
+                } else {
+                    const m = Math.floor(left / 60);
+                    const s = (left % 60).toString().padStart(2, '0');
+                    disp.textContent = `${m}:${s}`;
+                    const pct = ((300 - left) / 300) * 100;
+                    prog.style.width = `${pct}%`;
+                    if (pct > 50) prog.style.backgroundColor = "var(--accent)";
+                }
+            }, 1000);
+        }
+
+        function continueLearning() {
+            state.sessionId = null;
+            state.exchangeEvents = [];
+            state.sessionStartTime = null;
+            document.getElementById('session-info-block').style.display = 'none';
+            document.getElementById('chapter-select').disabled = false;
+            document.getElementById('start-session-btn').disabled = false;
+            document.getElementById('start-session-btn').textContent = 'START SESSION';
+            document.getElementById('session-timer').textContent = "00:00";
+            document.getElementById('session-timer').classList.remove('danger');
+            document.getElementById('messages-container').innerHTML = '<div class="empty-state">WAITING FOR SESSION TO START</div>';
+            document.getElementById('header-sid').textContent = "";
+            setPhase('session');
+        }
+
+        // Graph
+        async function loadGraph() {
+            document.getElementById('graph-chapter-name').textContent = state.chapter ? document.getElementById('chapter-select').options[document.getElementById('chapter-select').selectedIndex].text : "All Chapters";
+
+            let data = null;
+            try {
+                if (state.studentId && state.chapter) {
+                    data = await api(`/api/graph/student/${state.studentId}?chapter=${state.chapter}`);
+                } else {
+                    throw new Error("Missing params");
+                }
+            } catch (err) {
+                document.getElementById('graph-message').style.display = 'block';
+                data = {
+                    nodes: [
+                        { id: 1, name: "Coulomb's Law", mastery_score: 0.8 },
+                        { id: 2, name: "Electric Field", mastery_score: 0.6 },
+                        { id: 3, name: "Gauss's Law", mastery_score: 0.35 },
+                        { id: 4, name: "Electric Potential", mastery_score: 0.15 },
+                        { id: 5, name: "Capacitance", mastery_score: null }
+                    ],
+                    edges: [
+                        { source: 1, target: 2, relationship_type: "REQUIRES" },
+                        { source: 2, target: 3, relationship_type: "REQUIRES" },
+                        { source: 3, target: 4, relationship_type: "REQUIRES" },
+                        { source: 4, target: 5, relationship_type: "REQUIRES" }
+                    ]
+                };
+            }
+
+            if (!data.nodes || data.nodes.length === 0) {
+                document.getElementById('graph-message').style.display = 'block';
+            } else {
+                document.getElementById('graph-message').style.display = 'none';
+            }
+
+            const nodes = new vis.DataSet(data.nodes.map(n => {
+                let color = "#ef4444", border = "#ef4444";
+                let size = 14;
+                const m = n.mastery_score;
+                if (m > 0.75) { color = "#22c55e"; size = 20; }
+                else if (m > 0.50) { color = "#eab308"; size = 18; }
+                else if (m > 0.25) { color = "#f97316"; size = 16; }
+
+                return {
+                    id: n.id,
+                    label: n.name,
+                    mastery: m,
+                    color: { background: color + "26", border: color, hover: { background: color + "40", border: color } },
+                    size: size,
+                    font: { color: "#dde1f0", size: 12, face: "DM Mono" },
+                    borderWidth: 2,
+                    shape: 'dot'
+                };
+            }));
+
+            const edges = new vis.DataSet((data.edges || []).map(e => {
+                let c = "#2a3245", d = false, ar = "to";
+                if (e.relationship_type === "REQUIRES") { c = "#454d68"; d = true; }
+                else if (e.relationship_type === "COMMONLY_CONFUSED_WITH") { c = "#f97316"; d = true; ar = "to, from"; }
+                else if (e.relationship_type === "ANALOGY_OF") { c = "#4f8ef7"; d = true; }
+
+                return {
+                    from: e.source,
+                    to: e.target,
+                    color: c,
+                    dashes: d,
+                    arrows: ar,
+                    smooth: { type: "curvedCW", roundness: 0.2 }
+                }
+            }));
+
+            const container = document.getElementById('network-graph');
+            const netData = { nodes, edges };
+            const options = {
+                physics: {
+                    enabled: true,
+                    stabilization: { iterations: 150 },
+                    barnesHut: { gravitationalConstant: -3000, centralGravity: 0.3, springLength: 120 }
+                },
+                interaction: { hover: true, tooltipDelay: 100, zoomView: true, dragView: true },
+                nodes: {
+                    font: { color: "#dde1f0", size: 12, face: "DM Mono" },
+                    borderWidth: 2,
+                    chosen: { node: function (vals) { vals.size += 3; vals.borderWidth = 2; } }
+                },
+                edges: {
+                    arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+                    font: { color: "#454d68", size: 10, face: "DM Mono" }
+                }
+            };
+
+            if (network) network.destroy();
+            network = new vis.Network(container, netData, options);
+
+            network.on("click", function (params) {
+                const tt = document.getElementById('node-tooltip');
+                if (params.nodes.length > 0) {
+                    const nId = params.nodes[0];
+                    const nd = nodes.get(nId);
+
+                    document.getElementById('tt-name').textContent = nd.label;
+                    document.getElementById('tt-name').style.color = (nd.color && nd.color.border) ? nd.color.border : "var(--text)";
+                    tt.style.borderTopColor = (nd.color && nd.color.border) ? nd.color.border : "var(--border)";
+
+                    document.getElementById('tt-bar').style.width = nd.mastery ? (nd.mastery * 100) + "%" : "0%";
+                    document.getElementById('tt-diff').textContent = (nd.mastery && nd.mastery > 0) ? Math.round(nd.mastery * 100) + "%" : "NO DATA";
+
+                    const p = params.pointer.DOM;
+                    tt.style.left = (p.x + 15) + "px";
+                    tt.style.top = (p.y + 15) + "px";
+                    tt.style.display = "block";
+                } else {
+                    tt.style.display = "none";
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

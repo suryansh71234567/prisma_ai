@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
 from auth import jwt
-from db import postgres_service
+from db import neo4j_service, postgres_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -48,7 +48,16 @@ async def register(request: Request, body: RegisterRequest):
         )
 
     student_id = student["id"]
+    await neo4j_service.create_student_node(
+        request.app.state.neo4j,
+        student_id
+    )
+    await neo4j_service.initialize_student_mastery(
+        request.app.state.neo4j,
+        student_id
+    )
     token = jwt.create_access_token(student_id)
+
 
     return TokenResponse(
         token=token,

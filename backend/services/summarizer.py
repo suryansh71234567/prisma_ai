@@ -41,6 +41,7 @@ class Summarizer:
         chapter: str,
         plan: SessionPlan,
         exchange_events: list[dict],
+        neo4j_driver,
     ) -> dict:
         """Build and return the summary dict the route sends to save_session_record.
 
@@ -65,12 +66,8 @@ class Summarizer:
             questions_asked / plan.max_exchanges, 1.0
         ) if plan.max_exchanges > 0 else 0.0
 
-        # ── Step 3: Extract off_plan_concepts (rule-based MVP) ────────
-        off_plan_concepts = (
-            plan.off_plan_concepts
-            if hasattr(plan, "off_plan_concepts")
-            else []
-        )
+        # ── Step 3: Extract off_plan_concepts (from LLM output only) ────
+        off_plan_concepts = []
 
         # ── Step 4: Get session number today ──────────────────────────
         session_number_today = await postgres_service.get_session_count_today(
@@ -93,7 +90,16 @@ class Summarizer:
             merged = list(dict.fromkeys(off_plan_concepts + llm_off_plan))
             off_plan_concepts = merged
 
-        # ── Step 6: Return result dict ────────────────────────────────
+        # ── Step 6: Score mastery from conversation ───────────────────
+        await self._score_mastery(
+            neo4j_driver=neo4j_driver,
+            student_id=student_id,
+            chapter=chapter,
+            conversation_history=history,
+            planner_summary=parsed["planner_summary"],
+        )
+
+        # ── Step 7: Return result dict ────────────────────────────────
         return {
             "planner_summary": parsed["planner_summary"],
             "student_facing_summary": parsed["student_facing_summary"],
@@ -102,6 +108,123 @@ class Summarizer:
             "session_number_today": session_number_today,
             "interaction_log": exchange_events,
         }
+
+    # ------------------------------------------------------------------
+    # Private — Mastery scoring from conversation
+    # ------------------------------------------------------------------
+
+    async def _score_mastery(
+        self,
+        neo4j_driver,
+        student_id: str,
+        chapter: str,
+        conversation_history: list[dict],
+        planner_summary: str,
+    ) -> None:
+        """
+        Uses LLM to infer mastery score changes from the session,
+        then writes them to Neo4j. Called once at session end.
+        """
+        from db import neo4j_service
+
+        conversation_text = "\n".join([
+            f"{m['role'].upper()}: {m['content']}"
+            for m in conversation_history[-20:]
+        ])
+
+        system_prompt = (
+            "You are a knowledge assessment system. Analyze a tutoring "
+            "conversation and infer mastery score changes for each concept "
+            "touched. Respond ONLY with valid JSON. No markdown. No explanation."
+        )
+
+        user_prompt = f"""Chapter: {chapter}
+Session summary: {planner_summary}
+
+Conversation:
+{conversation_text}
+
+Based on the student's responses, return a JSON array of mastery updates.
+Only include concepts that were actually tested or discussed — do not guess
+at untouched concepts.
+
+Rules for scoring:
+- Student answered correctly without hints: score_delta = +0.10
+- Student answered correctly after one hint: score_delta = +0.05
+- Student answered incorrectly but showed partial understanding: score_delta = -0.03
+- Student answered incorrectly with no understanding: score_delta = -0.07
+- Concept was explained but not tested: score_delta = +0.02
+
+Return this exact format:
+[
+  {{"concept_id": "exact_concept_id", "score_delta": 0.10, "reasoning": "one sentence"}}
+]
+
+If you cannot identify any concept ids, return an empty array: []"""
+
+        try:
+            chat_service = self.kernel.get_service("default")
+            response = await chat_service.get_chat_message_contents(
+                chat_history=ChatHistory(
+                    messages=[
+                        ChatMessageContent(
+                            role=AuthorRole.SYSTEM, content=system_prompt
+                        ),
+                        ChatMessageContent(
+                            role=AuthorRole.USER, content=user_prompt
+                        ),
+                    ]
+                ),
+                settings=OpenAIChatPromptExecutionSettings(
+                    service_id="default",
+                    max_tokens=512,
+                    temperature=0.1,
+                ),
+            )
+            raw = str(response[0])
+        except Exception:
+            logger.exception("_score_mastery: LLM call failed — skipping mastery update")
+            return
+
+        # Parse defensively
+        try:
+            clean = re.sub(r'```json|```', '', raw).strip()
+            match = re.search(r'\[.*\]', clean, re.DOTALL)
+            if not match:
+                logger.warning("_score_mastery: no JSON array found. Raw: %s", raw[:200])
+                return
+            updates = json.loads(match.group())
+        except Exception as exc:
+            logger.warning("_score_mastery parse failed: %s. Raw: %s", exc, raw[:200])
+            return
+
+        # Write each update to Neo4j (clamp final score to [0.0, 1.0])
+        for update in updates:
+            concept_id = update.get("concept_id", "").strip()
+            delta = float(update.get("score_delta", 0))
+
+            if not concept_id:
+                continue
+
+            # Fetch current mastery (threshold=1.1 returns ALL concepts)
+            current_results = await neo4j_service.get_student_weak_concepts(
+                neo4j_driver, student_id, chapter,
+                threshold=1.1,
+                limit=200,
+            )
+            current_map = {
+                r["concept_id"]: r["mastery_score"] for r in current_results
+            }
+            current_score = current_map.get(concept_id, 0.5)
+            new_score = max(0.0, min(1.0, current_score + delta))
+
+            await neo4j_service.update_mastery_score(
+                neo4j_driver, student_id, concept_id, new_score
+            )
+            logger.info(
+                "Mastery updated: %s  %.2f → %.2f",
+                concept_id, current_score, new_score,
+            )
 
     # ------------------------------------------------------------------
     # Private — LLM summary generation

@@ -6,6 +6,7 @@ No business logic. Every function takes a redis client as its first arg.
 Key patterns:
   session:{session_id}:plan          → SessionPlan JSON (TTL 2h)
   session:{session_id}:history       → list of message dicts (TTL 2h)
+  session:{session_id}:events        → list of ExchangeEvent dicts (TTL 2h)
   student:{student_id}:lstm_state    → serialized tensor bytes (no TTL)
 """
 
@@ -120,3 +121,35 @@ async def get_lstm_state(
     """Return raw LSTM state bytes, or None if not found."""
     key = f"student:{student_id}:lstm_state"
     return await redis.get(key)
+
+
+# ---------------------------------------------------------------------------
+# 8. Append exchange event
+# ---------------------------------------------------------------------------
+async def append_exchange_event(
+    redis, session_id: str, event: dict
+) -> None:
+    """Appends one ExchangeEvent dict to the session events list."""
+    key = f"session:{session_id}:events"
+    raw = await redis.get(key)
+    events = json.loads(raw) if raw else []
+    events.append(event)
+    await redis.setex(key, SESSION_TTL, json.dumps(events))
+
+
+# ---------------------------------------------------------------------------
+# 9. Get and clear exchange events
+# ---------------------------------------------------------------------------
+async def get_and_clear_exchange_events(
+    redis, session_id: str
+) -> list[dict]:
+    """
+    Reads full events list and deletes the key.
+    Returns empty list if key does not exist.
+    """
+    key = f"session:{session_id}:events"
+    raw = await redis.get(key)
+    if raw:
+        await redis.delete(key)
+        return json.loads(raw)
+    return []

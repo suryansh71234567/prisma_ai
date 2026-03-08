@@ -50,7 +50,8 @@ class SessionPlan(BaseModel):
     error_focus: List[ErrorType]
     forbidden_concepts: List[str]
     session_goal: str
-    max_exchanges: int = 5
+    max_exchanges: int = 20
+    total_duration_minutes: int = 25
     decay_risk_concepts: List[str]
     adaptation_rules: Dict[str, str]
 
@@ -103,7 +104,7 @@ if __name__ == "__main__":
         error_focus=[ErrorType.PREREQUISITE_GAP, ErrorType.COORDINATION_FAILURE],
         forbidden_concepts=["wave_optics"],
         session_goal="Strengthen series-capacitor and Kirchhoff's-law fundamentals.",
-        max_exchanges=5,
+        max_exchanges=20,
         decay_risk_concepts=["coulombs_law"],
         adaptation_rules={"consecutive_wrong_3": "fetch_prereq"},
     )

@@ -1,0 +1,41 @@
+
+>> Step 1 -- POST /api/auth/register
+
+============================================================
+  [FAIL]  [register]  HTTP 200
+  {"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1MzZhYmIwNC1jODdkLTQ0MzUtODc1NS0xZTkyYTQyMTc5MWUiLCJleHAiOjE3NzM1ODc3NTR9.jxqGxCR74JWlTl2Dfv0EUN1EBrYBo9e_nx8ROEQm_qE", "student_id": "536abb04-c87d-4435-8755-1e92a421791e", "name": "Test Student"}
+============================================================
+  (200 also acceptable -- marked PASS)
+
+>> Step 2 -- POST /api/auth/login
+
+============================================================
+  [PASS]  [login]  HTTP 200
+  {"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1MzZhYmIwNC1jODdkLTQ0MzUtODc1NS0xZTkyYTQyMTc5MWUiLCJleHAiOjE3NzM1ODc3NTd9.0V_GDfZFKH1nAubECUVQaCi5ldIwAcEjAs23yJZBdCI", "student_id": "536abb04-c87d-4435-8755-1e92a421791e", "name": "Test Student"}
+============================================================
+
+>> Step 3 -- POST /api/session/start  (may take ~10 s for LLM plan)
+
+============================================================
+  [PASS]  [start]  HTTP 200
+  {"session_id": "7f863400-43ba-4332-b2f1-a72f938768e4", "session_goal": "Master Potential due to Spherical Shell by correctly answering 3 out of 5 questions.", "primary_concept": "potential_due_to_spherical_shell", "difficulty": 0.5}
+============================================================
+
+>> Step 4 -- POST /api/session/message  (may take ~15 s for LLM response)
+
+============================================================
+  [FAIL]  [message]  HTTP 0
+  {"error": "timed out"}
+============================================================
+
+>> Step 5 -- POST /api/session/end  (may take ~15 s for summarizer)
+
+============================================================
+  [PASS]  [end]  HTTP 200
+  {"summary": "Don't worry, we'll get through this together! One thing to focus on next is making sure you understand how charge distributes itself around a spherical object before tackling more complex problems like potential due to spherical shells.", "plan_completion_rate": 0.0}
+============================================================
+
+============================================================
+  Result: 4/5 steps passed
+============================================================
+

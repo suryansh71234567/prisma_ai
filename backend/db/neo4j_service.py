@@ -649,3 +649,77 @@ async def get_planner_context(
     """
     return await get_weak_concepts_with_edges(driver, student_id, chapter)
 
+
+# ---------------------------------------------------------------------------
+# Registration helper — ensure Student node exists in Neo4j
+# ---------------------------------------------------------------------------
+async def create_student_node(driver, student_id: str) -> None:
+    """
+    Creates a Student node in Neo4j if it doesn't already exist.
+    Called once at registration. Safe to call multiple times (MERGE).
+    """
+    await driver.execute_query(
+        "MERGE (:Student {id: $student_id})",
+        student_id=student_id
+    )
+
+
+# ---------------------------------------------------------------------------
+# Registration helper — initialize HAS_MASTERY edges for all concepts
+# ---------------------------------------------------------------------------
+async def initialize_student_mastery(driver, student_id: str) -> int:
+    """
+    Creates HAS_MASTERY edges from the Student node to ALL Concept
+    nodes with random initial scores.
+    Called once at registration after create_student_node().
+    Returns the number of concepts initialized.
+
+    Distribution: normal, mean=0.5, std=0.12, clamped to [0.1, 0.8].
+    Never starts at 0 (too discouraging for planner) or above 0.8
+    (student hasn't proven mastery yet).
+    """
+    import random
+
+    # Step 1: fetch all concept ids from the graph
+    result = await driver.execute_query(
+        "MATCH (c:Concept) RETURN c.id AS concept_id"
+    )
+    concept_ids = [r["concept_id"] for r in result.records]
+
+    if not concept_ids:
+        print("WARNING: No concepts found in graph. "
+              "Did you run the seed script?")
+        return 0
+
+    # Step 2: generate scores — normal distribution clamped to [0.1, 0.8]
+    scores = []
+    for _ in concept_ids:
+        raw = random.gauss(0.5, 0.12)
+        clamped = max(0.1, min(0.8, raw))
+        scores.append(round(clamped, 3))
+
+    # Step 3: write all HAS_MASTERY edges in one batch query
+    # UNWIND keeps this a single round trip regardless of concept count
+    await driver.execute_query(
+        """
+        UNWIND $updates AS update
+        MATCH (s:Student {id: $student_id})
+        MATCH (c:Concept {id: update.concept_id})
+        MERGE (s)-[m:HAS_MASTERY]->(c)
+        SET m.score = update.score,
+            m.last_seen = datetime(),
+            m.attempt_count = 0
+        """,
+        student_id=student_id,
+        updates=[
+            {"concept_id": cid, "score": score}
+            for cid, score in zip(concept_ids, scores)
+        ],
+        routing_=neo4j.RoutingControl.WRITE,
+    )
+
+    print(f"Initialized mastery for {len(concept_ids)} concepts. "
+          f"Score range: {min(scores):.3f} – {max(scores):.3f}, "
+          f"mean: {sum(scores)/len(scores):.3f}")
+
+    return len(concept_ids)

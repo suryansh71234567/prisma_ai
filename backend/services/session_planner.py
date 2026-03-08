@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 PLANNER_SYSTEM_PROMPT = """\
 You are a session planner for a JEE tutoring system.
-Generate a focused 5-minute study session plan.
+Generate a focused 25-minute study session plan.
 Respond ONLY with valid JSON matching the schema exactly.
 No explanation, no markdown, no preamble."""
 
@@ -38,7 +38,14 @@ Recent session summaries:
 Sessions completed today: {session_count_today}
 
 Rules:
-- max_exchanges is always 5
+- max_exchanges is always 20
+- The session is 25 minutes long. Allocate time across phases:
+  INTRO 2min, DEFINITION 4min, EXAMPLES 5min,
+  LOGICAL_QUESTIONS 5min, PROBLEM 7min, WRAP_UP 2min.
+  Adjust phase time budgets based on student's weak areas —
+  if student has PREREQUISITE_GAP errors, give more time
+  to DEFINITION and EXAMPLES. If SURFACE_KNOWLEDGE errors,
+  give more time to PROBLEM phase.
 - Pick ONE primary concept to teach
 - Choose revision_concepts that embed naturally into questions about the primary concept
 - If sessions_today >= 6, set difficulty_baseline <= 0.5 and choose a concept student almost knows (mastery 0.4-0.6)
@@ -62,7 +69,7 @@ Return this exact JSON schema:
   "error_focus": ["error_type"],
   "forbidden_concepts": ["concept_id"],
   "session_goal": "one sentence",
-  "max_exchanges": 5,
+  "max_exchanges": 20,
   "decay_risk_concepts": ["concept_id"],
   "adaptation_rules": {{
     "consecutive_wrong_3": "fetch_prerequisite",

@@ -41,7 +41,6 @@ class MessageResponse(BaseModel):
 
 class EndSessionRequest(BaseModel):
     session_id: str
-    exchange_events: list[dict] = []
 
 
 class EndSessionResponse(BaseModel):
@@ -83,11 +82,17 @@ async def send_message(
     """Process a single student message during an active session."""
     tutor = request.app.state.tutor
 
-    response_text, _event = await tutor.process_message(
+    response_text, event = await tutor.process_message(
         session_id=body.session_id,
         student_id=student_id,
         message=body.message,
         turn_signal=body.turn_signal,
+    )
+
+    await redis_service.append_exchange_event(
+        request.app.state.redis,
+        body.session_id,
+        event.__dict__ if hasattr(event, '__dict__') else dict(event),
     )
 
     return MessageResponse(
@@ -122,13 +127,20 @@ async def end_session(
     else:
         chapter = plan.target_concepts[0] if plan.target_concepts else "unknown"
 
-    # Generate summary
+    # Drain events accumulated in Redis during this session
+    exchange_events = await redis_service.get_and_clear_exchange_events(
+        request.app.state.redis,
+        body.session_id,
+    )
+
+    # Generate summary + write mastery scores to Neo4j
     result = await summarizer.run_end_of_session(
         session_id=body.session_id,
         student_id=student_id,
         chapter=chapter,
         plan=plan,
-        exchange_events=body.exchange_events,
+        exchange_events=exchange_events,
+        neo4j_driver=request.app.state.neo4j,
     )
 
     # Persist session record
